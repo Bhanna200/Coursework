@@ -11,13 +11,16 @@ using Microsoft.Xna.Framework.Media;
 
 namespace Coursework
 {
-    /// <summary>
-    /// This is the main type for your game
-    /// </summary>
     public class Game1 : Microsoft.Xna.Framework.Game
     {
         GraphicsDeviceManager graphics;
-        SpriteBatch spriteBatch;
+        GraphicsDevice device;
+
+        Effect effect;
+        Matrix viewMatrix;
+        Matrix projectionMatrix;
+
+        Terrain landscape;
 
         public Game1()
         {
@@ -25,67 +28,71 @@ namespace Coursework
             Content.RootDirectory = "Content";
         }
 
-        /// <summary>
-        /// Allows the game to perform any initialization it needs to before starting to run.
-        /// This is where it can query for any required services and load any non-graphic
-        /// related content.  Calling base.Initialize will enumerate through any components
-        /// and initialize them as well.
-        /// </summary>
         protected override void Initialize()
         {
-            // TODO: Add your initialization logic here
+            graphics.PreferredBackBufferWidth = 500;
+            graphics.PreferredBackBufferHeight = 500;
+
+            graphics.ApplyChanges();
+            Window.Title = "GP3 Coursework";
+
+            landscape = new Terrain(GraphicsDevice);
 
             base.Initialize();
         }
 
-        /// <summary>
-        /// LoadContent will be called once per game and is the place to load
-        /// all of your content.
-        /// </summary>
         protected override void LoadContent()
         {
-            // Create a new SpriteBatch, which can be used to draw textures.
-            spriteBatch = new SpriteBatch(GraphicsDevice);
+            device = GraphicsDevice;
 
-            // TODO: use this.Content to load your game content here
+            viewMatrix = Matrix.CreateLookAt(new Vector3(130, 30, -50), new Vector3(0, 0, -40), new Vector3(0, 1, 0));
+            projectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, device.Viewport.AspectRatio, 0.3f, 1000.0f);
+
+            effect = Content.Load<Effect>("Effects/Series4Effects");
+            landscape.LoadVertices(Content.Load<Texture2D>("Maps/heightMap"));
+
         }
 
-        /// <summary>
-        /// UnloadContent will be called once per game and is the place to unload
-        /// all content.
-        /// </summary>
         protected override void UnloadContent()
         {
-            // TODO: Unload any non ContentManager content here
         }
 
-        /// <summary>
-        /// Allows the game to run logic such as updating the world,
-        /// checking for collisions, gathering input, and playing audio.
-        /// </summary>
-        /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Update(GameTime gameTime)
         {
-            // Allows the game to exit
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed)
                 this.Exit();
-
-            // TODO: Add your update logic here
 
             base.Update(gameTime);
         }
 
-        /// <summary>
-        /// This is called when the game should draw itself.
-        /// </summary>
-        /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            float time = (float)gameTime.TotalGameTime.TotalMilliseconds / 100.0f;
+            RasterizerState rs = new RasterizerState();
+            rs.CullMode = CullMode.None;
+            device.RasterizerState = rs;
 
-            // TODO: Add your drawing code here
+            device.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, Color.Black, 1.0f, 0);
+            DrawTerrain(viewMatrix);
 
             base.Draw(gameTime);
+        }
+
+        private void DrawTerrain(Matrix currentViewMatrix)
+        {
+            Matrix worldMatrix = Matrix.Identity;
+            effect.Parameters["xWorld"].SetValue(worldMatrix);
+            effect.Parameters["xView"].SetValue(currentViewMatrix);
+            effect.Parameters["xProjection"].SetValue(projectionMatrix);
+
+            effect.Parameters["xEnableLighting"].SetValue(true);
+            effect.Parameters["xAmbient"].SetValue(0.4f);
+            effect.Parameters["xLightDirection"].SetValue(new Vector3(-0.5f, -1, -0.5f));
+            foreach (EffectPass pass in effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                landscape.Draw();
+            }
         }
     }
 }
