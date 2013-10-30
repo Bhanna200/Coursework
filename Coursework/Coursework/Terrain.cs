@@ -3,174 +3,124 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Audio;
-using Microsoft.Xna.Framework.Content;
-using Microsoft.Xna.Framework.GamerServices;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
-using Microsoft.Xna.Framework.Media;
 
 namespace Coursework
 {
-    public struct VertexPositionNormalColored
-    {
-        public Vector3 Position;
-        public Color Color;
-        public Vector3 Normal;
-
-        public static int SizeInBytes = 7 * 4;
-        public readonly static VertexDeclaration VertexDeclaration = new VertexDeclaration
-              (
-                  new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
-                  new VertexElement(sizeof(float) * 3, VertexElementFormat.Color, VertexElementUsage.Color, 0),
-                  new VertexElement(sizeof(float) * 3 + 4, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0)
-              );
-    }
-
-
     class Terrain
-    {
-        GraphicsDevice graphicsDevice;
+    {       
+        private VertexBuffer vertexBuffer;
+        private IndexBuffer indexBuffer;
 
-        Texture2D heightMap;
-
-        VertexPositionNormalColored[] vertices;
-
-        int terrainWidth;
-        int terrainLength;
-        float[,] heightData;
-        int[] indices;
-
-        VertexBuffer terrainVertexBuffer;
-        IndexBuffer terrainIndexBuffer;
-
-        public Terrain(GraphicsDevice graphicsDevice)
+        private GraphicsDevice device;
+        private Texture2D terrainTexture;
+        private float textureScale;
+        private float[,] heights;
+        
+        public Terrain(GraphicsDevice graphicsDevice, Texture2D heightMap, Texture2D terrainTexture, float textureScale, int terrainWidth, int terrainHeight, float heightScale)
         {
-            this.graphicsDevice = graphicsDevice;
+            device = graphicsDevice;
+            this.terrainTexture = terrainTexture;
+            this.textureScale = textureScale;
+
+            ReadHeightMap(heightMap, terrainWidth, terrainHeight, heightScale);
+
+            BuildVertexBuffer(terrainWidth, terrainHeight, heightScale);
+
+            BuildIndexBuffer(terrainWidth, terrainHeight);
         }
-
-        public void LoadVertices(Texture2D heightMap)
+       
+        private void ReadHeightMap(Texture2D heightMap, int terrainWidth, int terrainHeight, float heightScale)
         {
-            this.heightMap = heightMap;
-            LoadHeightData();
-            SetUpTerrainVertices();
-            SetUpTerrainIndices();
-            CalculateNormals();
-            CopyToTerrainBuffers();
-        }
+            float min = float.MaxValue;
+            float max = float.MinValue;
 
-        public void LoadHeightData()
-        {
-            float minimumHeight = float.MaxValue;
-            float maximumHeight = float.MinValue;
+            heights = new float[terrainWidth, terrainHeight];
 
-            terrainWidth = heightMap.Width;
-            terrainLength = heightMap.Height;
+            Color[] heightMapData = new Color[heightMap.Width * heightMap.Height];
 
-            Color[] heightMapColors = new Color[terrainWidth * terrainLength];
-            heightMap.GetData(heightMapColors);
-
-            heightData = new float[terrainWidth, terrainLength];
+            heightMap.GetData(heightMapData);
             for (int x = 0; x < terrainWidth; x++)
-                for (int y = 0; y < terrainLength; y++)
+                for (int z = 0; z < terrainHeight; z++)
                 {
-                    heightData[x, y] = heightMapColors[x + y * terrainWidth].R;
-                    if (heightData[x, y] < minimumHeight) minimumHeight = heightData[x, y];
-                    if (heightData[x, y] > maximumHeight) maximumHeight = heightData[x, y];
+                    byte height = heightMapData[x + z * terrainWidth].R;
+                    heights[x, z] = (float)height / 255f;
+
+                    max = MathHelper.Max(max, heights[x, z]);
+                    min = MathHelper.Min(min, heights[x, z]);
                 }
 
-            for (int x = 0; x < terrainWidth; x++)
-                for (int y = 0; y < terrainLength; y++)
-                    heightData[x, y] = (heightData[x, y] - minimumHeight) / (maximumHeight - minimumHeight) * 30.0f;
-        }
-
-
-        private void SetUpTerrainVertices()
-        {
-            vertices = new VertexPositionNormalColored[terrainWidth * terrainLength];
+            float range = (max - min);
 
             for (int x = 0; x < terrainWidth; x++)
-            {
-                for (int y = 0; y < terrainLength; y++)
+                for (int z = 0; z < terrainHeight; z++)
                 {
-                    vertices[x + y * terrainWidth].Position = new Vector3(x, heightData[x, y], -y);
-
-                    if (heightData[x, y] < 6)
-                        vertices[x + y * terrainWidth].Color = Color.Blue;
-                    else if (heightData[x, y] < 15)
-                        vertices[x + y * terrainWidth].Color = Color.Green;
-                    else if (heightData[x, y] < 25)
-                        vertices[x + y * terrainWidth].Color = Color.Brown;
-                    else
-                        vertices[x + y * terrainWidth].Color = Color.White;
+                    heights[x, z] =
+                        ((heights[x, z] - min) / range) * heightScale;
                 }
-            }
         }
-
-        private void SetUpTerrainIndices()
+       
+        private void BuildVertexBuffer(int width, int height, float heightScale)
         {
-            indices = new int[(terrainWidth - 1) * (terrainLength - 1) * 6];
+            VertexPositionNormalTexture[] vertices = new VertexPositionNormalTexture[width * height];
+
+            for (int x = 0; x < width; x++)
+                for (int z = 0; z < height; z++)
+                {
+                    vertices[x + (z * width)].Position =
+                      new Vector3(x, heights[x, z], z);
+                    vertices[x + (z * width)].TextureCoordinate =
+                        new Vector2((float)x / textureScale, (float)z / textureScale);
+                }
+
+            vertexBuffer = new VertexBuffer(device, typeof(VertexPositionNormalTexture), vertices.Length, BufferUsage.WriteOnly);
+
+            vertexBuffer.SetData(vertices);
+        }
+        
+
+        
+        private void BuildIndexBuffer(int width, int height)
+        {
+            int indexCount = (width - 1) * (height - 1) * 6;
+            short[] indices = new short[indexCount];
             int counter = 0;
-            for (int y = 0; y < terrainLength - 1; y++)
-            {
-                for (int x = 0; x < terrainWidth - 1; x++)
-                {
-                    int lowerLeft = x + y * terrainWidth;
-                    int lowerRight = (x + 1) + y * terrainWidth;
-                    int topLeft = x + (y + 1) * terrainWidth;
-                    int topRight = (x + 1) + (y + 1) * terrainWidth;
 
-                    indices[counter++] = topLeft;
+            for (short z = 0; z < height - 1; z++)
+                for (short x = 0; x < height - 1; x++)
+                {
+                    short upperLeft = (short)(x + (z * width));
+                    short upperRight = (short)(upperLeft + 1);
+                    short lowerLeft = (short)(upperLeft + width);
+                    short lowerRight = (short)(upperLeft + width + 1);
+
+                    indices[counter++] = upperLeft;
                     indices[counter++] = lowerRight;
                     indices[counter++] = lowerLeft;
-
-                    indices[counter++] = topLeft;
-                    indices[counter++] = topRight;
+                    indices[counter++] = upperLeft;
+                    indices[counter++] = upperRight;
                     indices[counter++] = lowerRight;
                 }
-            }
+
+            indexBuffer = new IndexBuffer(device, IndexElementSize.SixteenBits, indices.Length, BufferUsage.WriteOnly);
+            indexBuffer.SetData(indices);
         }
-
-
-        private void CalculateNormals()
+        
+        public void Draw(Camera camera, Effect effect)
         {
-            for (int i = 0; i < vertices.Length; i++)
-                vertices[i].Normal = new Vector3(0, 0, 0);
+            effect.CurrentTechnique = effect.Techniques["Technique1"];
+            effect.Parameters["terrainTexture1"].SetValue(terrainTexture);
+            effect.Parameters["World"].SetValue(Matrix.Identity);
+            effect.Parameters["View"].SetValue(camera.View);
+            effect.Parameters["Projection"].SetValue(camera.Projection);
 
-            for (int i = 0; i < indices.Length / 3; i++)
+            foreach (EffectPass pass in effect.CurrentTechnique.Passes)
             {
-                int index1 = indices[i * 3];
-                int index2 = indices[i * 3 + 1];
-                int index3 = indices[i * 3 + 2];
-
-                Vector3 side1 = vertices[index1].Position - vertices[index3].Position;
-                Vector3 side2 = vertices[index1].Position - vertices[index2].Position;
-                Vector3 normal = Vector3.Cross(side1, side2);
-
-                vertices[index1].Normal += normal;
-                vertices[index2].Normal += normal;
-                vertices[index3].Normal += normal;
+                pass.Apply();
+                device.SetVertexBuffer(vertexBuffer);
+                device.Indices = indexBuffer;
+                device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, vertexBuffer.VertexCount, 0, indexBuffer.IndexCount / 3);
             }
-
-            for (int i = 0; i < vertices.Length; i++)
-                vertices[i].Normal.Normalize();
-        }
-
-        private void CopyToTerrainBuffers()
-        {
-            terrainVertexBuffer = new VertexBuffer(graphicsDevice, VertexPositionNormalColored.VertexDeclaration, vertices.Length,
-                BufferUsage.WriteOnly);
-            terrainVertexBuffer.SetData(vertices);
-
-            terrainIndexBuffer = new IndexBuffer(graphicsDevice, typeof(int), indices.Length, BufferUsage.WriteOnly);
-            terrainIndexBuffer.SetData(indices);
-        }
-
-        public void Draw()
-        {
-            graphicsDevice.Indices = terrainIndexBuffer;
-            graphicsDevice.SetVertexBuffer(terrainVertexBuffer);
-            graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, vertices.Length, 0, indices.Length / 3);
         }
     }
 }
