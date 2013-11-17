@@ -48,8 +48,8 @@ namespace Coursework
                 foreach (BasicEffect effect in mesh.Effects)
                 {
                     effect.World = boneTransforms[mesh.ParentBone.Index] * Transform;
-                    effect.View = (Game as Game1).Camera.ViewMatrix;
-                    effect.Projection = (Game as Game1).Camera.ProjectionMatrix;
+                    effect.View = (Game as Game1).Camera.viewMatrix;
+                    effect.Projection = (Game as Game1).Camera.projectionMatrix;
                 }
                 mesh.Draw();
             }

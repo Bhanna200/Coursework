@@ -21,8 +21,6 @@ using BEPUphysicsDrawer.Models;
 using BEPUphysicsDrawer.Font;
 using BEPUphysicsDrawer.Lines;
 
-
-
 namespace Coursework
 {
     /// <summary>
@@ -33,14 +31,22 @@ namespace Coursework
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
 
+
         /// <summary>
         /// World in which the simulation runs.
         /// </summary>
-        Space space;
+        public Space space;
         /// <summary>
         /// Controls the viewpoint and how the user can see the world.
         /// </summary>
-        public Camera Camera;
+        //public Camera Camera;
+
+        //public ChaseCamera Camera;
+        //ChaseCamera Camera = new ChaseCamera();
+
+        public ChaseCamera Camera = new ChaseCamera();
+
+        public Player player;
 
         /// <summary>
         /// Graphical model to use for the boxes in the scene.
@@ -59,18 +65,15 @@ namespace Coursework
         /// </summary>
         public MouseState MouseState;
 
-        public EntityModel shipModel;
+        //KeyboardState previousKeyBoardState = Keyboard.GetState();
+        KeyboardState previousKeyBoardState = Keyboard.GetState();
 
-        public EntityModel playerModel;
 
-        public Box shipColBox;
-        public Vector3 shipPos = new Vector3(0f, 4.0f, 0f);
+
         public SpriteFont font;
 
-        //public Vector3 shipPos { get; set; }
-        //public ModelDrawer ModelDrawer;
+        public ModelDrawer ModelDrawer;
 
-        public MobileMesh shipMesh;
         public Game1()
         {
             graphics = new GraphicsDeviceManager(this);
@@ -87,8 +90,17 @@ namespace Coursework
         /// </summary>
         protected override void Initialize()
         {
+
+
+            space = new Space();
+            space.ForceUpdater.Gravity = new Vector3(0, -9.81f, 0);
             //Setup the camera.
-            Camera = new Camera(this, new Vector3(0, 3, 10), 5);
+            //Camera = new Camera(this, new Vector3(0, 3, 10), 5);
+
+            ChaseCamera camera = new ChaseCamera();
+
+            player = new Player();
+            player.PlayerLoad(this);
 
             base.Initialize();
         }
@@ -99,6 +111,7 @@ namespace Coursework
         /// </summary>
         protected override void LoadContent()
         {
+
             //This 1x1x1 cube model will represent the box entities in the space.
             CubeModel = Content.Load<Model>("Models/cube");
 
@@ -106,14 +119,10 @@ namespace Coursework
 
             font = Content.Load<SpriteFont>("Fonts/Debug");
 
-            //ModelDrawer = new InstancedModelDrawer(this);
-
-            //Construct a new space for the physics simulation to occur within.
-            space = new Space();
-            space.ForceUpdater.Gravity = new Vector3(0, -9.81f, 0);
+            ModelDrawer = new InstancedModelDrawer(this);
 
             DrawTerrain();
-            DrawPlayerShip();
+
 
 
 
@@ -144,55 +153,23 @@ namespace Coursework
 
         public void DrawPlayerShip()
         {
-            //Vector3[] ShipVertices;
-            //int[] ShipIndices;
-            ////Create a big hollow sphere (squished into an ellipsoid).
-            //TriangleMesh.GetVerticesAndIndicesFromModel(Content.Load<Model>("Models/Ship"), out ShipVertices, out ShipIndices);
-            //var transform = new AffineTransform(new Vector3(.0005f, .0005f, .0005f), Quaternion.Identity, new Vector3(0, 0, 0));
-
-            shipColBox = new Box(shipPos, 0.9f, 0.9f, 0.9f);
-            space.Add(shipColBox);
-            shipModel = new EntityModel(shipColBox, Content.Load<Model>("Models/Ship"), Matrix.Identity * Matrix.CreateScale(0.0005f), this);
-            shipColBox.Tag = shipModel;
-            //shipColBox.LinearVelocity = new Vector3(0,-1,0);
-            //shipColBox.Mass = 1.0f;
-            shipColBox.IsAffectedByGravity = false;
-            shipColBox.BecomeDynamic(1);
-
-            Components.Add(shipModel);
-
-            shipColBox.CollisionInformation.Events.DetectingInitialCollision += HandleCollision;
-            ////Note that meshes can also be made solid (MobileMeshSolidity.Solid).  This gives meshes a solid collidable volume, instead of just
-            ////being thin shells.  However, enabling solidity is more expensive.
-            //shipMesh = new MobileMesh(ShipVertices, ShipIndices, transform, MobileMeshSolidity.Counterclockwise);
-            //shipMesh.Position = new Vector3(1, 0, 0);
-            //shipMesh.LinearVelocity = new Vector3(0, -1, 0);
-            //shipMesh.Mass = 1;
-            ////shipMesh.CollisionInformation.Shape.MeshCollisionMargin = 0.1f;
-            ////shipMesh.LocalInertiaTensorInverse = new Matrix3X3();
-            ////shipMesh.IgnoreShapeChanges = true;
-            //space.Add(shipMesh);
-
-            //Matrix scaling = Matrix.CreateScale(0.0005f); //Since the cube model is 1x1x1, it needs to be scaled to match the size of each individual box.
-            //EntityModel model = new EntityModel(shipMesh, shipModel, scaling, this);
-            ////Add the drawable game component for this entity to the game.
-            //Components.Add(model);
+            //player.shipColBox.CollisionInformation.Events.DetectingInitialCollision += HandleCollision;            
         }
 
-        void HandleCollision(EntityCollidable sender, Collidable other, CollidablePairHandler pair)
-        {
-            //This type of event can occur when an entity hits any other object which can be collided with.
-            //They aren't always entities; for example, hitting a StaticMesh would trigger this.
-            //Entities use EntityCollidables as collision proxies; see if the thing we hit is one.
-            var otherEntityInformation = other as EntityCollidable;
-            if (otherEntityInformation != null)
-            {
-                // We hit an entity! remove it.
-                space.Remove(otherEntityInformation.Entity);
-                //Remove the graphics too.
-                Components.Remove((EntityModel)otherEntityInformation.Entity.Tag);
-            }
-        }
+        //void HandleCollision(EntityCollidable sender, Collidable other, CollidablePairHandler pair)
+        //{
+        //    //This type of event can occur when an entity hits any other object which can be collided with.
+        //    //They aren't always entities; for example, hitting a StaticMesh would trigger this.
+        //    //Entities use EntityCollidables as collision proxies; see if the thing we hit is one.
+        //    var otherEntityInformation = other as EntityCollidable;
+        //    if (otherEntityInformation != null)
+        //    {
+        //       // We hit an entity! remove it.
+        //        space.Remove(otherEntityInformation.Entity);
+        //        //Remove the graphics too.
+        //        Components.Remove((EntityModel)otherEntityInformation.Entity.Tag);
+        //    }
+        //}
 
         /// <summary>
         /// UnloadContent will be called once per game and is the place to unload
@@ -203,7 +180,6 @@ namespace Coursework
             // TODO: Unload any non ContentManager content here
         }
 
-
         /// <summary>
         /// Allows the game to run logic such as updating the world,
         /// checking for collisions, gathering input, and playing audio.
@@ -211,67 +187,70 @@ namespace Coursework
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Update(GameTime gameTime)
         {
+            //Steps the simulation forward one time step.
+            space.Update(gameTime.ElapsedGameTime.Milliseconds / 1000.0f);
 
             KeyboardState = Keyboard.GetState();
+            //KeyboardState previousKeyBoardState = Keyboard.GetState();
+
             MouseState = Mouse.GetState();
-            //ModelDrawer.Update();
+            ModelDrawer.Update();
+
+            if (KeyboardState.IsKeyDown(Keys.B))
+            {
+                Camera.currentCameraMode = ChaseCamera.CameraMode.chase;
+            }
+
+            if (KeyboardState.IsKeyDown(Keys.N))
+            {
+                Camera.currentCameraMode = ChaseCamera.CameraMode.free;
+            }
+
+            if (KeyboardState.IsKeyDown(Keys.M))
+            {
+                Camera.currentCameraMode = ChaseCamera.CameraMode.orbit;
+            }
+
+
+
+
+            Camera.Update(player.cubeWorld);
 
             // Allows the game to exit
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || KeyboardState.IsKeyDown(Keys.Escape))
                 Exit();
 
             //Update the camera.
-            Camera.Update((float)gameTime.ElapsedGameTime.TotalSeconds);
+            //Camera.Update((float)gameTime.ElapsedGameTime.TotalSeconds);
 
             #region Block shooting
 
-            if (MouseState.LeftButton == ButtonState.Pressed)
-            {
-                //If the user is clicking, start firing some boxes.
-                //First, create a new dynamic box at the camera's location.
-                Box toAdd = new Box(Camera.Position, 1, 1, 1, 1);
-                //Set the velocity of the new box to fly in the direction the camera is pointing.
-                //Entities have a whole bunch of properties that can be read from and written to.
-                //Try looking around in the entity's available properties to get an idea of what is available.
-                toAdd.LinearVelocity = Camera.WorldMatrix.Forward * 10;
-                //Add the new box to the simulation.
-                space.Add(toAdd);
+            //if (MouseState.LeftButton == ButtonState.Pressed)
+            //{
+            //    //If the user is clicking, start firing some boxes.
+            //    //First, create a new dynamic box at the camera's location.
+            //    Box toAdd = new Box(Camera.Position, 1, 1, 1, 1);
+            //    //Set the velocity of the new box to fly in the direction the camera is pointing.
+            //    //Entities have a whole bunch of properties that can be read from and written to.
+            //    //Try looking around in the entity's available properties to get an idea of what is available.
+            //    toAdd.LinearVelocity = Camera.WorldMatrix.Forward * 10;
+            //    //Add the new box to the simulation.
+            //    space.Add(toAdd);
 
-                //Add a graphical representation of the box to the drawable game components.
-                EntityModel model = new EntityModel(toAdd, CubeModel, Matrix.Identity, this);
-                Components.Add(model);
-                toAdd.Tag = model;  //set the object tag of this entity to the model so that it's easy to delete the graphics component later if the entity is removed.
-            }
+            //    //Add a graphical representation of the box to the drawable game components.
+            //    EntityModel model = new EntityModel(toAdd, CubeModel, Matrix.Identity, this);
+            //    Components.Add(model);
+            //    toAdd.Tag = model;  //set the object tag of this entity to the model so that it's easy to delete the graphics component later if the entity is removed.
+            //}
 
 
             #endregion
 
-
-            if (KeyboardState.IsKeyDown(Keys.Up))
-            {
-                //shipColBox.LinearVelocity = new Vector3(0, 0, -1);
-                //shipColBox.LinearVelocity = new Vector3(0, -1, 0);
-                //shipPos += new Vector3(0, 1, 0);
-                shipColBox.Position += new Vector3(0, 0, -0.01f);
-            }
-            if (KeyboardState.IsKeyDown(Keys.Down))
-            {
-                //shipColBox.LinearVelocity = new Vector3(0, 0, -1);
-                //shipColBox.LinearVelocity = new Vector3(0, -1, 0);
-                //shipPos += new Vector3(0, -1, 0);
-                shipColBox.Position += new Vector3(0, 0, 0.01f);
-            }
-
-
-
-            //Steps the simulation forward one time step.
-            space.Update();
-
-
-
+            player.PlayerUpdate(gameTime);
 
 
             base.Update(gameTime);
+
         }
 
         /// <summary>
@@ -283,7 +262,6 @@ namespace Coursework
             GraphicsDevice.Clear(Color.CornflowerBlue);
             spriteBatch = new SpriteBatch(GraphicsDevice);
 
-
             RasterizerState rasterizerState = new RasterizerState();
             rasterizerState.FillMode = FillMode.Solid;
             GraphicsDevice.RasterizerState = rasterizerState;
@@ -293,7 +271,7 @@ namespace Coursework
             //ModelDrawer.Draw(Camera.ViewMatrix, Camera.ProjectionMatrix);
             //spriteBatch.Begin();
 
-            //spriteBatch.DrawString(font, "Ship Pos: " + shipColBox.Position, new Vector2(10, 10), Color.Black);
+            //spriteBatch.DrawString(font, "Ship Pos: " + player.ShipColBox, new Vector2(10, 10), Color.Black);
 
             //spriteBatch.End();
 
@@ -314,8 +292,8 @@ namespace Coursework
                     effect.World = transforms[mesh.ParentBone.Index] * world;
 
                     // Use the matrices provided by the chase camera
-                    effect.View = Camera.ViewMatrix;
-                    effect.Projection = Camera.ProjectionMatrix;
+                    effect.View = Camera.viewMatrix;
+                    effect.Projection = Camera.projectionMatrix;
                 }
                 mesh.Draw();
             }
