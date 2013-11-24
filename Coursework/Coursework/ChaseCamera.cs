@@ -10,220 +10,301 @@ namespace Coursework
 {
     public class ChaseCamera
     {
-        private Vector3 position;
-        private Vector3 target;
-        public Matrix viewMatrix, projectionMatrix;
+        #region Chased object properties (set externally each frame)
 
-        private float yaw, pitch, roll;
-        private float speed;
-        private Matrix cameraRotation;
+        /// <summary>
+        /// Position of object being chased.
+        /// </summary>
+        public Vector3 ChasePosition
+        {
+            get { return chasePosition; }
+            set { chasePosition = value; }
+        }
+        private Vector3 chasePosition;
 
+        /// <summary>
+        /// Direction the chased object is facing.
+        /// </summary>
+        public Vector3 ChaseDirection
+        {
+            get { return chaseDirection; }
+            set { chaseDirection = value; }
+        }
+        private Vector3 chaseDirection;
+
+        /// <summary>
+        /// Chased object's Up vector.
+        /// </summary>
+        public Vector3 Up
+        {
+            get { return up; }
+            set { up = value; }
+        }
+        private Vector3 up = Vector3.Up;
+
+        #endregion
+
+        #region Desired camera positioning (set when creating camera or changing view)
+
+        /// <summary>
+        /// Desired camera position in the chased object's coordinate system.
+        /// </summary>
+        public Vector3 DesiredPositionOffset
+        {
+            get { return desiredPositionOffset; }
+            set { desiredPositionOffset = value; }
+        }
+        private Vector3 desiredPositionOffset = new Vector3(0, 2.0f, 2.0f);
+
+        /// <summary>
+        /// Desired camera position in world space.
+        /// </summary>
+        public Vector3 DesiredPosition
+        {
+            get
+            {
+                // Ensure correct value even if update has not been called this frame
+                UpdateWorldPositions();
+
+                return desiredPosition;
+            }
+        }
         private Vector3 desiredPosition;
-        private Vector3 desiredTarget;
-        private Vector3 offsetDistance;
 
-
-
-        public Player player;
-
-        public enum CameraMode
+        /// <summary>
+        /// Look at point in the chased object's coordinate system.
+        /// </summary>
+        public Vector3 LookAtOffset
         {
-            free = 0,
-            chase = 1,
-            orbit = 2
+            get { return lookAtOffset; }
+            set { lookAtOffset = value; }
         }
-        public CameraMode currentCameraMode = CameraMode.free;
+        private Vector3 lookAtOffset = new Vector3(0, 2.8f, 0);
 
-
-        public ChaseCamera()
+        /// <summary>
+        /// Look at point in world space.
+        /// </summary>
+        public Vector3 LookAt
         {
-            ResetCamera();
-
-        }
-
-        public void ResetCamera()
-        {
-            desiredPosition = position;
-            desiredTarget = target;
-
-            offsetDistance = new Vector3(0, 0, 10);
-
-
-            position = new Vector3(0, 0, 50);
-            target = new Vector3();
-            //target = player.shipPos;
-
-            yaw = 0.0f;
-            pitch = 0.0f;
-            roll = 0.0f;
-
-            speed = .3f;
-
-            cameraRotation = Matrix.Identity;
-
-            viewMatrix = Matrix.Identity;
-            projectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(45.0f), 16 / 9, .5f, 500f);
-        }
-
-        public void Update(Matrix chasedObjectsWorld)
-        {
-            HandleInput();
-            UpdateViewMatrix(chasedObjectsWorld);
-        }
-
-        private void UpdateViewMatrix(Matrix chasedObjectsWorld)
-        {
-            switch (currentCameraMode)
+            get
             {
-                case CameraMode.free:
-                    cameraRotation.Forward.Normalize();
-                    cameraRotation.Up.Normalize();
-                    cameraRotation.Right.Normalize();
+                // Ensure correct value even if update has not been called this frame
+                UpdateWorldPositions();
 
-                    cameraRotation *= Matrix.CreateFromAxisAngle(cameraRotation.Right, pitch);
-                    cameraRotation *= Matrix.CreateFromAxisAngle(cameraRotation.Up, yaw);
-                    cameraRotation *= Matrix.CreateFromAxisAngle(cameraRotation.Forward, roll);
-
-                    yaw = 0.0f;
-                    pitch = 0.0f;
-                    roll = 0.0f;
-
-                    target = position + cameraRotation.Forward;
-
-                    break;
-
-                case CameraMode.chase:
-
-                    cameraRotation.Forward.Normalize();
-                    chasedObjectsWorld.Right.Normalize();
-                    chasedObjectsWorld.Up.Normalize();
-
-                    cameraRotation = Matrix.CreateFromAxisAngle(cameraRotation.Forward, roll);
-
-                    desiredTarget = chasedObjectsWorld.Translation;
-                    target = desiredTarget;
-                    target += chasedObjectsWorld.Right * yaw;
-                    target += chasedObjectsWorld.Up * pitch;
-
-                    desiredPosition = Vector3.Transform(offsetDistance, chasedObjectsWorld);
-                    position = Vector3.SmoothStep(position, desiredPosition, .15f);
-
-                    yaw = MathHelper.SmoothStep(yaw, 0f, .1f);
-                    pitch = MathHelper.SmoothStep(pitch, 0f, .1f);
-                    roll = MathHelper.SmoothStep(roll, 0f, .2f);
-
-                    break;
-
-                case CameraMode.orbit:
-
-                    cameraRotation.Forward.Normalize();
-
-                    cameraRotation = Matrix.CreateRotationX(pitch) * Matrix.CreateRotationY(yaw) * Matrix.CreateFromAxisAngle(cameraRotation.Forward, roll);
-
-                    desiredPosition = Vector3.Transform(offsetDistance, cameraRotation);
-                    desiredPosition += chasedObjectsWorld.Translation;
-                    position = desiredPosition;
-
-                    target = chasedObjectsWorld.Translation;
-
-                    roll = MathHelper.SmoothStep(roll, 0f, .2f);
-
-
-                    break;
-
-                //viewMatrix = Matrix.CreateLookAt(position, target, Vector3.Up);
-            }
-            viewMatrix = Matrix.CreateLookAt(position, target, cameraRotation.Up);
-        }
-
-        private void HandleInput()
-        {
-            KeyboardState keyboardState = Keyboard.GetState();
-
-            if (currentCameraMode == CameraMode.free)
-            {
-                if (keyboardState.IsKeyDown(Keys.J))
-                {
-                    yaw += .02f;
-                }
-                if (keyboardState.IsKeyDown(Keys.L))
-                {
-                    yaw += -.02f;
-                }
-                if (keyboardState.IsKeyDown(Keys.I))
-                {
-                    pitch += -.02f;
-                }
-                if (keyboardState.IsKeyDown(Keys.K))
-                {
-                    pitch += .02f;
-                }
-                if (keyboardState.IsKeyDown(Keys.U))
-                {
-                    roll += -.02f;
-                }
-                if (keyboardState.IsKeyDown(Keys.O))
-                {
-                    roll += .02f;
-                }
-
-                if (keyboardState.IsKeyDown(Keys.W))
-                {
-                    MoveCamera(cameraRotation.Forward);
-                }
-                if (keyboardState.IsKeyDown(Keys.S))
-                {
-                    MoveCamera(-cameraRotation.Forward);
-                }
-                if (keyboardState.IsKeyDown(Keys.A))
-                {
-                    MoveCamera(-cameraRotation.Right);
-                }
-                if (keyboardState.IsKeyDown(Keys.D))
-                {
-                    MoveCamera(cameraRotation.Right);
-                }
-                if (keyboardState.IsKeyDown(Keys.E))
-                {
-                    MoveCamera(cameraRotation.Up);
-                }
-                if (keyboardState.IsKeyDown(Keys.Q))
-                {
-                    MoveCamera(-cameraRotation.Up);
-                }
-            }
-
-            if (currentCameraMode == CameraMode.chase)
-            {
-
-                if (keyboardState.IsKeyDown(Keys.W))
-                {
-                    MoveCamera(cameraRotation.Backward);
-
-                }
-
-
-
-
+                return lookAt;
             }
         }
+        private Vector3 lookAt;
 
-        private void MoveCamera(Vector3 addedVector)
+        #endregion
+
+        #region Camera physics (typically set when creating camera)
+
+        /// <summary>
+        /// Physics coefficient which controls the influence of the camera's position
+        /// over the spring force. The stiffer the spring, the closer it will stay to
+        /// the chased object.
+        /// </summary>
+        public float Stiffness
         {
-            position += speed * addedVector;
+            get { return stiffness; }
+            set { stiffness = value; }
+        }
+        private float stiffness = 1800.0f;
+
+        /// <summary>
+        /// Physics coefficient which approximates internal friction of the spring.
+        /// Sufficient damping will prevent the spring from oscillating infinitely.
+        /// </summary>
+        public float Damping
+        {
+            get { return damping; }
+            set { damping = value; }
+        }
+        private float damping = 600.0f;
+
+        /// <summary>
+        /// Mass of the camera body. Heaver objects require stiffer springs with less
+        /// damping to move at the same rate as lighter objects.
+        /// </summary>
+        public float Mass
+        {
+            get { return mass; }
+            set { mass = value; }
+        }
+        private float mass = 50.0f;
+
+        #endregion
+
+        #region Current camera properties (updated by camera physics)
+
+        /// <summary>
+        /// Position of camera in world space.
+        /// </summary>
+        public Vector3 Position
+        {
+            get { return position; }
+            set { position = value; }
+        }
+        private Vector3 position;
+
+        /// <summary>
+        /// Velocity of camera.
+        /// </summary>
+        public Vector3 Velocity
+        {
+            get { return velocity; }
+        }
+        private Vector3 velocity;
+
+        #endregion
+
+
+        #region Perspective properties
+
+        /// <summary>
+        /// Perspective aspect ratio. Default value should be overriden by application.
+        /// </summary>
+        public float AspectRatio
+        {
+            get { return aspectRatio; }
+            set { aspectRatio = value; }
+        }
+        private float aspectRatio = 4.0f / 3.0f;
+
+        /// <summary>
+        /// Perspective field of view.
+        /// </summary>
+        public float FieldOfView
+        {
+            get { return fieldOfView; }
+            set { fieldOfView = value; }
+        }
+        private float fieldOfView = MathHelper.ToRadians(45.0f);
+
+        /// <summary>
+        /// Distance to the near clipping plane.
+        /// </summary>
+        public float NearPlaneDistance
+        {
+            get { return nearPlaneDistance; }
+            set { nearPlaneDistance = value; }
+        }
+        private float nearPlaneDistance = 1.0f;
+
+        /// <summary>
+        /// Distance to the far clipping plane.
+        /// </summary>
+        public float FarPlaneDistance
+        {
+            get { return farPlaneDistance; }
+            set { farPlaneDistance = value; }
+        }
+        private float farPlaneDistance = 100000.0f;
+
+        #endregion
+
+        #region Matrix properties
+
+        /// <summary>
+        /// View transform matrix.
+        /// </summary>
+        public Matrix View
+        {
+            get { return view; }
+        }
+        private Matrix view;
+
+        /// <summary>
+        /// Projecton transform matrix.
+        /// </summary>
+        public Matrix Projection
+        {
+            get { return projection; }
+        }
+        private Matrix projection;
+
+        #endregion
+
+
+        #region Methods
+
+        /// <summary>
+        /// Rebuilds object space values in world space. Invoke before publicly
+        /// returning or privately accessing world space values.
+        /// </summary>
+        private void UpdateWorldPositions()
+        {
+            // Construct a matrix to transform from object space to worldspace
+            Matrix transform = Matrix.Identity;
+            transform.Forward = ChaseDirection;
+            transform.Up = Up;
+            transform.Right = Vector3.Cross(Up, ChaseDirection);
+
+            // Calculate desired camera properties in world space
+            desiredPosition = ChasePosition +
+                Vector3.TransformNormal(DesiredPositionOffset, transform);
+            lookAt = ChasePosition +
+                Vector3.TransformNormal(LookAtOffset, transform);
         }
 
-        public void SwitchCameraMode()
+        /// <summary>
+        /// Rebuilds camera's view and projection matricies.
+        /// </summary>
+        private void UpdateMatrices()
         {
-            ResetCamera();
-
-            currentCameraMode++;
-
-            if ((int)currentCameraMode > 2)
-            {
-                currentCameraMode = 0;
-            }
+            view = Matrix.CreateLookAt(this.Position, this.LookAt, this.Up);
+            projection = Matrix.CreatePerspectiveFieldOfView(FieldOfView,
+                AspectRatio, NearPlaneDistance, FarPlaneDistance);
         }
 
+        /// <summary>
+        /// Forces camera to be at desired position and to stop moving. The is useful
+        /// when the chased object is first created or after it has been teleported.
+        /// Failing to call this after a large change to the chased object's position
+        /// will result in the camera quickly flying across the world.
+        /// </summary>
+        public void Reset()
+        {
+            UpdateWorldPositions();
+
+            // Stop motion
+            velocity = Vector3.Zero;
+
+            // Force desired position
+            position = desiredPosition;
+
+            UpdateMatrices();
+        }
+
+        /// <summary>
+        /// Animates the camera from its current position towards the desired offset
+        /// behind the chased object. The camera's animation is controlled by a simple
+        /// physical spring attached to the camera and anchored to the desired position.
+        /// </summary>
+        public void Update(GameTime gameTime)
+        {
+            if (gameTime == null)
+                throw new ArgumentNullException("gameTime");
+
+            UpdateWorldPositions();
+
+            float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            // Calculate spring force
+            Vector3 stretch = position - desiredPosition;
+            Vector3 force = -stiffness * stretch - damping * velocity;
+
+            // Apply acceleration
+            Vector3 acceleration = force / mass;
+            velocity += acceleration * elapsed;
+
+            // Apply velocity
+            position += velocity * elapsed;
+
+            UpdateMatrices();
+        }
+
+        #endregion
     }
 }

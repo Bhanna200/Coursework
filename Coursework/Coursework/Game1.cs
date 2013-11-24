@@ -28,104 +28,133 @@ namespace Coursework
     /// </summary>
     public class Game1 : Microsoft.Xna.Framework.Game
     {
+        #region Fields
+
         GraphicsDeviceManager graphics;
+
         SpriteBatch spriteBatch;
-
-
-        /// <summary>
-        /// World in which the simulation runs.
-        /// </summary>
-        public Space space;
-        /// <summary>
-        /// Controls the viewpoint and how the user can see the world.
-        /// </summary>
-        //public Camera Camera;
-
-        //public ChaseCamera Camera;
-        //ChaseCamera Camera = new ChaseCamera();
-
-        public ChaseCamera Camera = new ChaseCamera();
-
-        public Player player;
-
-        /// <summary>
-        /// Graphical model to use for the boxes in the scene.
-        /// </summary>
-        public Model CubeModel;
-        /// <summary>
-        /// Graphical model to use for the environment.
-        /// </summary>
-        public Model terrain;
-        /// <summary>
-        /// Contains the latest snapshot of the keyboard's input state.
-        /// </summary>
-        public KeyboardState KeyboardState;
-        /// <summary>
-        /// Contains the latest snapshot of the mouse's input state.
-        /// </summary>
-        public MouseState MouseState;
-
-        //KeyboardState previousKeyBoardState = Keyboard.GetState();
-        KeyboardState previousKeyBoardState = Keyboard.GetState();
-
-
+        SpriteFont spriteFont;
 
         public SpriteFont font;
 
-        public ModelDrawer ModelDrawer;
+
+        KeyboardState lastKeyboardState = new KeyboardState();
+        GamePadState lastGamePadState = new GamePadState();
+        MouseState lastMousState = new MouseState();
+        KeyboardState currentKeyboardState = new KeyboardState();
+        GamePadState currentGamePadState = new GamePadState();
+        MouseState currentMouseState = new MouseState();
+
+        public Player player;
+        public ChaseCamera camera;
+
+        //Model shipModel;
+        //Model groundModel;
+        public Model terrain;
+        public Model CubeModel;
+
+        public bool cameraMode3rdPerson;
+        public bool cameraModeChase = true;
+
+        public Texture2D cockpit;
+
+        public Space space;
+
+        BoundingBoxDrawer debugBoundingBoxDrawer;
+        BasicEffect debugDrawer;
+
+        bool cameraSpringEnabled = true;
+        bool debug = false;
+
+        #endregion
+
+        #region Initialization
+
 
         public Game1()
         {
             graphics = new GraphicsDeviceManager(this);
-            graphics.PreferredBackBufferWidth = 800;
-            graphics.PreferredBackBufferHeight = 600;
+            graphics.SupportedOrientations = DisplayOrientation.Portrait;
+
+
             Content.RootDirectory = "Content";
+            IsMouseVisible = true;
+
+#if WINDOWS_PHONE
+            graphics.PreferredBackBufferWidth = 480;
+            graphics.PreferredBackBufferHeight = 800;
+            
+            TargetElapsedTime = TimeSpan.FromTicks(333333);
+
+            graphics.IsFullScreen = true;
+#else
+            graphics.PreferredBackBufferWidth = 853;
+            graphics.PreferredBackBufferHeight = 480;
+#endif
+            //space = new Space();
+            //space.ForceUpdater.Gravity = new Vector3(0, -9.81f, 0);
+            // Create the chase camera
+            camera = new ChaseCamera();
+
+            // Set the camera offsets
+            camera.DesiredPositionOffset = new Vector3(0.0f, 20.0f, 60.0f);
+            camera.LookAtOffset = new Vector3(0.0f, 15.0f, 0.0f);
+
+            // Set camera perspective
+            camera.NearPlaneDistance = 10.0f;
+            camera.FarPlaneDistance = 100000.0f;
+
+            //TODO: Set any other camera invariants here such as field of view
         }
 
+
         /// <summary>
-        /// Allows the game to perform any initialization it needs to before starting to run.
-        /// This is where it can query for any required services and load any non-graphic
-        /// related content.  Calling base.Initialize will enumerate through any components
-        /// and initialize them as well.
+        /// Initalize the game
         /// </summary>
         protected override void Initialize()
         {
-
+            debugBoundingBoxDrawer = new BoundingBoxDrawer(this);
+            debugDrawer = new BasicEffect(GraphicsDevice);
 
             space = new Space();
             space.ForceUpdater.Gravity = new Vector3(0, -9.81f, 0);
-            //Setup the camera.
-            //Camera = new Camera(this, new Vector3(0, 3, 10), 5);
 
-            ChaseCamera camera = new ChaseCamera();
+            player = new Player(GraphicsDevice, this);
 
-            player = new Player();
-            player.PlayerLoad(this);
+            // Set the camera aspect ratio
+            // This must be done after the class to base.Initalize() which will
+            // initialize the graphics device.
+            //camera.AspectRatio = (float)graphics.GraphicsDevice.Viewport.Width /
+            //    graphics.GraphicsDevice.Viewport.Height;
+
+
+            // Perform an inital reset on the camera so that it starts at the resting
+            // position. If we don't do this, the camera will start at the origin and
+            // race across the world to get behind the chased object.
+            // This is performed here because the aspect ratio is needed by Reset.
+            UpdateCameraChaseTarget();
+            camera.Reset();
 
             base.Initialize();
         }
 
+
         /// <summary>
-        /// LoadContent will be called once per game and is the place to load
-        /// all of your content.
+        /// Load graphics content.
         /// </summary>
         protected override void LoadContent()
         {
-
-            //This 1x1x1 cube model will represent the box entities in the space.
-            CubeModel = Content.Load<Model>("Models/cube");
+            spriteBatch = new SpriteBatch(graphics.GraphicsDevice);            
 
             terrain = Content.Load<Model>("Models/desert");
 
             font = Content.Load<SpriteFont>("Fonts/Debug");
 
-            ModelDrawer = new InstancedModelDrawer(this);
+            CubeModel = Content.Load<Model>("Models/cube");
+
+            cockpit = Content.Load<Texture2D>("Textures/cockpit");
 
             DrawTerrain();
-
-
-
-
         }
 
         public void DrawTerrain()
@@ -141,162 +170,229 @@ namespace Coursework
             TriangleMesh.GetVerticesAndIndicesFromModel(terrain, out vertices, out indices);
             //Give the mesh information to a new StaticMesh.  
             //Give it a transformation which scoots it down below the kinematic box entity we created earlier.
-            var mesh = new StaticMesh(vertices, indices, new AffineTransform(new Vector3(0, -40, 0)));
+            var mesh = new StaticMesh(vertices, indices, new AffineTransform(new Vector3(0, -30, 0)));
 
             //Add it to the space!
             space.Add(mesh);
             //Make it visible too.
+
             Components.Add(new StaticModel(terrain, mesh.WorldTransform.Matrix, this));
             //======================================================================================         
 
         }
 
-        public void DrawPlayerShip()
-        {
-            //player.shipColBox.CollisionInformation.Events.DetectingInitialCollision += HandleCollision;            
-        }
 
-        //void HandleCollision(EntityCollidable sender, Collidable other, CollidablePairHandler pair)
-        //{
-        //    //This type of event can occur when an entity hits any other object which can be collided with.
-        //    //They aren't always entities; for example, hitting a StaticMesh would trigger this.
-        //    //Entities use EntityCollidables as collision proxies; see if the thing we hit is one.
-        //    var otherEntityInformation = other as EntityCollidable;
-        //    if (otherEntityInformation != null)
-        //    {
-        //       // We hit an entity! remove it.
-        //        space.Remove(otherEntityInformation.Entity);
-        //        //Remove the graphics too.
-        //        Components.Remove((EntityModel)otherEntityInformation.Entity.Tag);
-        //    }
-        //}
+        #endregion
+
+        #region Update and Draw
+
 
         /// <summary>
-        /// UnloadContent will be called once per game and is the place to unload
-        /// all content.
+        /// Allows the game to run logic.
         /// </summary>
-        protected override void UnloadContent()
-        {
-            // TODO: Unload any non ContentManager content here
-        }
-
-        /// <summary>
-        /// Allows the game to run logic such as updating the world,
-        /// checking for collisions, gathering input, and playing audio.
-        /// </summary>
-        /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Update(GameTime gameTime)
         {
             //Steps the simulation forward one time step.
             space.Update(gameTime.ElapsedGameTime.Milliseconds / 1000.0f);
 
-            KeyboardState = Keyboard.GetState();
-            //KeyboardState previousKeyBoardState = Keyboard.GetState();
+            lastKeyboardState = currentKeyboardState;
+            lastGamePadState = currentGamePadState;
+            lastMousState = currentMouseState;
 
-            MouseState = Mouse.GetState();
-            ModelDrawer.Update();
+            currentKeyboardState = Keyboard.GetState();
+            currentGamePadState = GamePad.GetState(PlayerIndex.One);
+            currentMouseState = Mouse.GetState();
 
-            if (KeyboardState.IsKeyDown(Keys.B))
+            // Exit when the Escape key or Back button is pressed
+            if (currentKeyboardState.IsKeyDown(Keys.Escape) ||
+                currentGamePadState.Buttons.Back == ButtonState.Pressed)
             {
-                Camera.currentCameraMode = ChaseCamera.CameraMode.chase;
-            }
-
-            if (KeyboardState.IsKeyDown(Keys.N))
-            {
-                Camera.currentCameraMode = ChaseCamera.CameraMode.free;
-            }
-
-            if (KeyboardState.IsKeyDown(Keys.M))
-            {
-                Camera.currentCameraMode = ChaseCamera.CameraMode.orbit;
-            }
-
-
-
-
-            Camera.Update(player.cubeWorld);
-
-            // Allows the game to exit
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || KeyboardState.IsKeyDown(Keys.Escape))
                 Exit();
+            }
 
-            //Update the camera.
-            //Camera.Update((float)gameTime.ElapsedGameTime.TotalSeconds);
+            bool touchTopLeft = currentMouseState.LeftButton == ButtonState.Pressed &&
+                    lastMousState.LeftButton != ButtonState.Pressed &&
+                    currentMouseState.X < GraphicsDevice.Viewport.Width / 10 &&
+                    currentMouseState.Y < GraphicsDevice.Viewport.Height / 10;
 
-            #region Block shooting
+            // Pressing the A button or key toggles the spring behavior on and off
+            if (lastKeyboardState.IsKeyUp(Keys.A) &&
+                (currentKeyboardState.IsKeyDown(Keys.A)) ||
+                (lastGamePadState.Buttons.A == ButtonState.Released &&
+                currentGamePadState.Buttons.A == ButtonState.Pressed) ||
+                touchTopLeft)
+            {
+                cameraSpringEnabled = !cameraSpringEnabled;
+            }
 
-            //if (MouseState.LeftButton == ButtonState.Pressed)
-            //{
-            //    //If the user is clicking, start firing some boxes.
-            //    //First, create a new dynamic box at the camera's location.
-            //    Box toAdd = new Box(Camera.Position, 1, 1, 1, 1);
-            //    //Set the velocity of the new box to fly in the direction the camera is pointing.
-            //    //Entities have a whole bunch of properties that can be read from and written to.
-            //    //Try looking around in the entity's available properties to get an idea of what is available.
-            //    toAdd.LinearVelocity = Camera.WorldMatrix.Forward * 10;
-            //    //Add the new box to the simulation.
-            //    space.Add(toAdd);
+            // Reset the ship on R key or right thumb stick clicked
+            if (currentKeyboardState.IsKeyDown(Keys.R) ||
+                currentGamePadState.Buttons.RightStick == ButtonState.Pressed)
+            {
+                player.Reset();
+                camera.Reset();
+            }
 
-            //    //Add a graphical representation of the box to the drawable game components.
-            //    EntityModel model = new EntityModel(toAdd, CubeModel, Matrix.Identity, this);
-            //    Components.Add(model);
-            //    toAdd.Tag = model;  //set the object tag of this entity to the model so that it's easy to delete the graphics component later if the entity is removed.
-            //}
+            // Update the ship
+            player.Update(gameTime);
+
+            // Update the camera to chase the new target
+            UpdateCameraChaseTarget();
+
+            // The chase camera's update behavior is the springs, but we can
+            // use the Reset method to have a locked, spring-less camera
+            if (cameraSpringEnabled)
+                camera.Update(gameTime);
+            else
+                camera.Reset();
 
 
-            #endregion
+            if (currentKeyboardState.IsKeyDown(Keys.Space))
+            {
+                //If the user is clicking, start firing some boxes.
+                //First, create a new dynamic box at the camera's location.
+                Box toAdd = new Box(player.shipColBox.Position, 1, 1, 1, 1);
+                //Set the velocity of the new box to fly in the direction the camera is pointing.
+                //Entities have a whole bunch of properties that can be read from and written to.
+                //Try looking around in the entity's available properties to get an idea of what is available.
+                toAdd.LinearVelocity = player.shipColBox.WorldTransform.Forward * 10;
+                //Add the new box to the simulation.
+                space.Add(toAdd);
 
-            player.PlayerUpdate(gameTime);
+                //Add a graphical representation of the box to the drawable game components.
+                EntityModel model = new EntityModel(toAdd, CubeModel, Matrix.Identity, this);
+
+                Components.Add(model);
+                toAdd.Tag = model;  //set the object tag of this entity to the model so that it's easy to delete the graphics component later if the entity is removed.
+            }
+
+            if (currentKeyboardState.IsKeyDown(Keys.D1))
+            {
+                cameraModeChase = true;
+                cameraMode3rdPerson = false;
+            }
+
+            if (currentKeyboardState.IsKeyDown(Keys.D2))
+            {
+                cameraModeChase = false;
+                cameraMode3rdPerson = true;
+            }
+
+
+            if (currentKeyboardState.IsKeyDown(Keys.U))
+            {
+                debug = true;
+            }
+            else debug = false;
 
 
             base.Update(gameTime);
-
         }
 
         /// <summary>
-        /// This is called when the game should draw itself.
+        /// Update the values to be chased by the camera
         /// </summary>
-        /// <param name="gameTime">Provides a snapshot of timing values.</param>
+        private void UpdateCameraChaseTarget()
+        {
+            if (cameraModeChase == true)
+            {
+                camera.ChasePosition = player.shipColBox.Position;
+                camera.ChaseDirection = player.shipColBox.OrientationMatrix.Forward;
+                camera.Up = player.shipColBox.OrientationMatrix.Up;
+            }
+            //else cameraModeChase = false;
+
+            if (cameraMode3rdPerson == true)
+            {
+                cameraModeChase = false;
+                camera.Position = player.shipColBox.Position;
+                camera.ChaseDirection = player.shipColBox.OrientationMatrix.Forward;
+                camera.Up = player.shipColBox.OrientationMatrix.Up;
+
+            }
+        }
+
+        /// <summary>
+        /// Draws the ship and ground.
+        /// </summary>
         protected override void Draw(GameTime gameTime)
         {
+
+            //GraphicsDevice device = graphics.GraphicsDevice;
             GraphicsDevice.Clear(Color.CornflowerBlue);
-            spriteBatch = new SpriteBatch(GraphicsDevice);
 
             RasterizerState rasterizerState = new RasterizerState();
             rasterizerState.FillMode = FillMode.Solid;
             GraphicsDevice.RasterizerState = rasterizerState;
 
-            // TODO: Add your drawing code here
-            //DrawModels(shipModel, Matrix.CreateScale(0.0005f));
-            //ModelDrawer.Draw(Camera.ViewMatrix, Camera.ProjectionMatrix);
-            //spriteBatch.Begin();
+            if (debug == true)
+            {
+                debugDrawer.LightingEnabled = false;
+                debugDrawer.VertexColorEnabled = true;
+                debugDrawer.World = Matrix.Identity;
+                debugDrawer.View = camera.View;
+                debugDrawer.Projection = camera.Projection;
 
-            //spriteBatch.DrawString(font, "Ship Pos: " + player.ShipColBox, new Vector2(10, 10), Color.Black);
+                debugBoundingBoxDrawer.Draw(debugDrawer, space);
 
-            //spriteBatch.End();
+                spriteBatch.Begin();
 
+                spriteBatch.DrawString(font, "Ship Pos: " + player.shipColBox.Position, new Vector2(10, 10), Color.Black);
+
+                spriteBatch.End();
+
+            }
 
             base.Draw(gameTime);
-        }
 
-        private void DrawModels(Model model, Matrix world)
-        {
-            Matrix[] transforms = new Matrix[model.Bones.Count];
-            model.CopyAbsoluteBoneTransformsTo(transforms);
-
-            foreach (ModelMesh mesh in model.Meshes)
+            if (cameraMode3rdPerson == true)
             {
-                foreach (BasicEffect effect in mesh.Effects)
-                {
-                    effect.EnableDefaultLighting();
-                    effect.World = transforms[mesh.ParentBone.Index] * world;
 
-                    // Use the matrices provided by the chase camera
-                    effect.View = Camera.viewMatrix;
-                    effect.Projection = Camera.projectionMatrix;
-                }
-                mesh.Draw();
+                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+
+                DrawScenery();
+
+                spriteBatch.End();
+
             }
+
+            GraphicsDevice.BlendState = BlendState.Opaque;
+            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+            GraphicsDevice.SamplerStates[0] = SamplerState.LinearWrap;
+
+
         }
+
+        private void DrawScenery()
+        {
+            Rectangle screenRectangle = new Rectangle(0, 0, graphics.PreferredBackBufferWidth, graphics.PreferredBackBufferHeight);
+            spriteBatch.Draw(cockpit, screenRectangle, Color.White);
+        }
+
+
+        ///// <summary>
+        ///// Simple model drawing method. The interesting part here is that
+        ///// the view and projection matrices are taken from the camera object.
+        ///// </summary>        
+        //private void DrawModel(Model model, Matrix world)
+        //{
+        //    Matrix[] transforms = new Matrix[model.Bones.Count];
+        //    model.CopyAbsoluteBoneTransformsTo(transforms);
+
+        //    foreach (ModelMesh mesh in model.Meshes)
+        //    {
+        //        foreach (BasicEffect effect in mesh.Effects)
+        //        {
+        //            effect.EnableDefaultLighting();
+        //            effect.World = transforms[mesh.ParentBone.Index] * world;
+
+        //            // Use the matrices provided by the chase camera
+        //            effect.View = camera.View;
+        //            effect.Projection = camera.Projection;
+        //        }
+        //        mesh.Draw();
+        //    }
+        //}
+        #endregion
     }
 }

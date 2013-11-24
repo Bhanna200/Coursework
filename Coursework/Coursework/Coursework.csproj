@@ -115,7 +115,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Camera.cs" />
     <Compile Include="ChaseCamera.cs" />
     <Compile Include="EntityModel.cs" />
     <Compile Include="Player.cs" />
