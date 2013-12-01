@@ -66,6 +66,12 @@ namespace Coursework
         bool cameraSpringEnabled = true;
         bool debug = false;
 
+        Skybox skybox;
+        Vector3 cameraPosition;
+
+        SoundEffect chainGun;
+
+
         #endregion
 
         #region Initialization
@@ -144,7 +150,8 @@ namespace Coursework
         /// </summary>
         protected override void LoadContent()
         {
-            spriteBatch = new SpriteBatch(graphics.GraphicsDevice);            
+            spriteBatch = new SpriteBatch(graphics.GraphicsDevice);
+            spriteFont = Content.Load<SpriteFont>("Fonts/Debug");
 
             terrain = Content.Load<Model>("Models/desert");
 
@@ -152,7 +159,11 @@ namespace Coursework
 
             CubeModel = Content.Load<Model>("Models/cube");
 
-            cockpit = Content.Load<Texture2D>("Textures/cockpit");
+            cockpit = Content.Load<Texture2D>("Models/cockpit");
+
+            skybox = new Skybox("Skyboxes/Sunset", Content);
+
+            chainGun = Content.Load<SoundEffect>("Audio/chainGun");
 
             DrawTerrain();
         }
@@ -193,7 +204,7 @@ namespace Coursework
         protected override void Update(GameTime gameTime)
         {
             //Steps the simulation forward one time step.
-            space.Update(gameTime.ElapsedGameTime.Milliseconds / 1000.0f);
+            space.Update();
 
             lastKeyboardState = currentKeyboardState;
             lastGamePadState = currentGamePadState;
@@ -249,21 +260,8 @@ namespace Coursework
 
             if (currentKeyboardState.IsKeyDown(Keys.Space))
             {
-                //If the user is clicking, start firing some boxes.
-                //First, create a new dynamic box at the camera's location.
-                Box toAdd = new Box(player.shipColBox.Position, 1, 1, 1, 1);
-                //Set the velocity of the new box to fly in the direction the camera is pointing.
-                //Entities have a whole bunch of properties that can be read from and written to.
-                //Try looking around in the entity's available properties to get an idea of what is available.
-                toAdd.LinearVelocity = player.shipColBox.WorldTransform.Forward * 10;
-                //Add the new box to the simulation.
-                space.Add(toAdd);
+                Firebullet();
 
-                //Add a graphical representation of the box to the drawable game components.
-                EntityModel model = new EntityModel(toAdd, CubeModel, Matrix.Identity, this);
-
-                Components.Add(model);
-                toAdd.Tag = model;  //set the object tag of this entity to the model so that it's easy to delete the graphics component later if the entity is removed.
             }
 
             if (currentKeyboardState.IsKeyDown(Keys.D1))
@@ -285,8 +283,23 @@ namespace Coursework
             }
             else debug = false;
 
+            //angle += 0.002f;
+            //cameraPosition = distance * new Vector3((float)Math.Sin(angle), 0, (float)Math.Cos(angle));
+            //view = Matrix.CreateLookAt(cameraPosition, new Vector3(0, 0, 0), Vector3.UnitY);
 
             base.Update(gameTime);
+        }
+
+        public void Firebullet()
+        {
+            chainGun.Play();
+            Box bullet = new Box(player.shipColBox.Position, 1f, 1f, 1f, 1000f);
+            bullet.LinearVelocity = camera.ChaseDirection * 100;
+            space.Add(bullet);
+            EntityModel model = new EntityModel(bullet, Content.Load<Model>("Models/cube"), Matrix.Identity, this);
+            Components.Add(model);
+            bullet.Tag = model;
+
         }
 
         /// <summary>
@@ -306,7 +319,7 @@ namespace Coursework
             {
                 cameraModeChase = false;
                 camera.Position = player.shipColBox.Position;
-                camera.ChaseDirection = player.shipColBox.OrientationMatrix.Forward;
+                //camera.ChaseDirection = player.shipColBox.OrientationMatrix.Forward;
                 camera.Up = player.shipColBox.OrientationMatrix.Up;
 
             }
@@ -321,9 +334,17 @@ namespace Coursework
             //GraphicsDevice device = graphics.GraphicsDevice;
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
+            //RasterizerState rasterizerState = new RasterizerState();
+            //rasterizerState.FillMode = FillMode.Solid;
+            //GraphicsDevice.RasterizerState = rasterizerState;
+
+            RasterizerState originalRasterizerState = graphics.GraphicsDevice.RasterizerState;
             RasterizerState rasterizerState = new RasterizerState();
-            rasterizerState.FillMode = FillMode.Solid;
-            GraphicsDevice.RasterizerState = rasterizerState;
+            rasterizerState.CullMode = CullMode.None;
+            graphics.GraphicsDevice.RasterizerState = rasterizerState;
+
+            skybox.Draw(camera.View, camera.Projection, cameraPosition);
+
 
             if (debug == true)
             {
@@ -355,6 +376,10 @@ namespace Coursework
                 spriteBatch.End();
 
             }
+
+
+
+
 
             GraphicsDevice.BlendState = BlendState.Opaque;
             GraphicsDevice.DepthStencilState = DepthStencilState.Default;

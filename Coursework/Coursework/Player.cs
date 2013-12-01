@@ -199,6 +199,7 @@ namespace Coursework
             }
 
 
+
             // Scale rotation amount to radians per second
             //rotationAmount = rotationAmount * RotationRate * elapsed;
 
@@ -266,5 +267,7 @@ namespace Coursework
             world.Right = right;
             world.Translation = Position;
         }
+
+
     }
 }
