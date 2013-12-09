@@ -1,16 +1,14 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
-using Microsoft.Xna.Framework.Content;
-using System;
-using BEPUphysics.Collidables;
-using BEPUphysics.Collidables.MobileCollidables;
+
 using BEPUphysics.Entities.Prefabs;
-using BEPUphysics.MathExtensions;
-using BEPUphysics.Entities;
-using BEPUphysics;
-using BEPUphysics.DataStructures;
-using BEPUphysics.NarrowPhaseSystems.Pairs;
+using BEPUphysicsDrawer.Lines;
+using Microsoft.Xna.Framework.Audio;
 
 namespace Coursework
 {
@@ -23,6 +21,8 @@ namespace Coursework
         public Box shipColBox;
         public EntityModel shipModel;
         public Matrix playerWorld;
+        public float thrustAmount = 0;
+        public SoundEffect laser;
 
         //private const float MinimumAltitude = 350.0f;
 
@@ -56,16 +56,6 @@ namespace Coursework
         }
 
         /// <summary>
-        /// Full speed at which ship can rotate; measured in radians per second.
-        /// </summary>
-        private const float RotationRate = 1.5f;
-
-        /// <summary>
-        /// Mass of ship.
-        /// </summary>
-        private const float Mass = 1.0f;
-
-        /// <summary>
         /// Maximum force that can be applied along the ship's direction.
         /// </summary>
         private const float ThrustForce = 24.0f;
@@ -93,67 +83,25 @@ namespace Coursework
 
         #region Initialization
 
-        public Player(GraphicsDevice device, Game1 game)
+        public Player(Game1 game)
         {
 
-            graphicsDevice = device;
+            //graphicsDevice = device;
             this.game = game;
-            shipColBox = new Box(shipPos, 4f, 4f, 4f);
-            //shipColBox = new Box(shipPos, 0.9f, 0.9f, 0.9f);
-            game.space.Add(shipColBox);
-            shipColBox.Mass = 10.0f;
+            shipColBox = new Box(shipPos, 1f, 1f, 1f);
+            shipColBox.Mass = 2.0f;
             shipColBox.IsAffectedByGravity = false;
-            //shipColBox.BecomeDynamic(1);          
-            //shipColBox.LinearVelocity = new Vector3(0,-100f,0f);
-            shipModel = new EntityModel(shipColBox, game.Content.Load<Model>("Models/Ship"), Matrix.Identity * Matrix.CreateScale(0.005f), game);
+            game.space.Add(shipColBox);
+            shipModel = new EntityModel(shipColBox, game.Content.Load<Model>("Models/Ship"), Matrix.Identity * Matrix.CreateScale(0.0005f), game);
+            laser = game.Content.Load<SoundEffect>("Audio/Laser");
             game.Components.Add(shipModel);
 
             shipColBox.Tag = shipModel;
 
-            Reset();
-        }
 
-        /// <summary>
-        /// Restore the ship to its original starting state
-        /// </summary>
-        public void Reset()
-        {
-            //Position = new Vector3(0, 100, 0);
-            Direction = shipColBox.OrientationMatrix.Forward;
-            Up = shipColBox.OrientationMatrix.Up;
-            right = shipColBox.OrientationMatrix.Right;
-            Velocity = Vector3.Zero;
         }
 
         #endregion
-
-        bool TouchLeft()
-        {
-            MouseState mouseState = Mouse.GetState();
-            return mouseState.LeftButton == ButtonState.Pressed &&
-                mouseState.X <= graphicsDevice.Viewport.Width / 3;
-        }
-
-        bool TouchRight()
-        {
-            MouseState mouseState = Mouse.GetState();
-            return mouseState.LeftButton == ButtonState.Pressed &&
-                mouseState.X >= 2 * graphicsDevice.Viewport.Width / 3;
-        }
-
-        bool TouchDown()
-        {
-            MouseState mouseState = Mouse.GetState();
-            return mouseState.LeftButton == ButtonState.Pressed &&
-                mouseState.Y <= graphicsDevice.Viewport.Height / 3;
-        }
-
-        bool TouchUp()
-        {
-            MouseState mouseState = Mouse.GetState();
-            return mouseState.LeftButton == ButtonState.Pressed &&
-                mouseState.Y >= 2 * graphicsDevice.Viewport.Height / 3;
-        }
 
         /// <summary>
         /// Applies a simple rotation to the ship and animates position based
@@ -162,17 +110,15 @@ namespace Coursework
         public void Update(GameTime gameTime)
         {
             KeyboardState keyboardState = Keyboard.GetState();
-            GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
-            MouseState mouseState = Mouse.GetState();
+
 
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
 
-            // Determine rotation amount from input
-            //Vector2 rotationAmount = -gamePadState.ThumbSticks.Left;
-            if (keyboardState.IsKeyDown(Keys.Left) || TouchLeft())
+            // Determine rotation amount from input            
+            if (keyboardState.IsKeyDown(Keys.Left))
             {
-                //rotationAmount.X = 1.0f;
+
                 shipColBox.AngularVelocity = new Vector3(0, 2, 0);
 
             }
@@ -180,25 +126,23 @@ namespace Coursework
             else
                 shipColBox.AngularVelocity = new Vector3(0, 0, 0);
 
-            if (keyboardState.IsKeyDown(Keys.Right) || TouchRight())
+            if (keyboardState.IsKeyDown(Keys.Right))
             {
-                //rotationAmount.X = -1.0f;
+
                 shipColBox.AngularVelocity = new Vector3(0, -2, 0);
             }
 
-            if (keyboardState.IsKeyDown(Keys.Up) || TouchUp())
+            if (keyboardState.IsKeyDown(Keys.Up))
             {
-                //rotationAmount.Y = -1.0f;
+
                 shipColBox.AngularVelocity = new Vector3(-1, 0, 0);
             }
 
-            if (keyboardState.IsKeyDown(Keys.Down) || TouchDown())
+            if (keyboardState.IsKeyDown(Keys.Down))
             {
-                //rotationAmount.Y = 1.0f;
+
                 shipColBox.AngularVelocity = new Vector3(1, 0, 0);
             }
-
-
 
             // Scale rotation amount to radians per second
             //rotationAmount = rotationAmount * RotationRate * elapsed;
@@ -209,14 +153,14 @@ namespace Coursework
             //    shipColBox.AngularVelocity = -shipColBox.AngularVelocity;
 
 
-            // Create rotation matrix from rotation amount
-            //Matrix rotationMatrix =
-            //    Matrix.CreateFromAxisAngle(Right, rotationAmount.Y) *
-            //    Matrix.CreateRotationY(rotationAmount.X);
+            //Create rotation matrix from rotation amount
+            Matrix rotationMatrix =
+                Matrix.CreateFromAxisAngle(Right, shipColBox.Orientation.Y) *
+                Matrix.CreateRotationY(shipColBox.Orientation.X);
 
-            // Rotate orientation vectors
-            //Direction = Vector3.TransformNormal(Direction, rotationMatrix);
-            //Up = Vector3.TransformNormal(Up, rotationMatrix);
+            //Rotate orientation vectors
+            Direction = Vector3.TransformNormal(shipColBox.OrientationMatrix.Forward, rotationMatrix);
+            Up = Vector3.TransformNormal(shipColBox.OrientationMatrix.Up, rotationMatrix);
 
             // Re-normalize orientation vectors
             // Without this, the matrix transformations may introduce small rounding
@@ -225,29 +169,30 @@ namespace Coursework
             Up.Normalize();
 
             // Re-calculate Right
-            right = Vector3.Cross(Direction, Up);
+            //right = Vector3.Cross(Direction, Up);
 
             // The same instability may cause the 3 orientation vectors may
             // also diverge. Either the Up or Direction vector needs to be
             // re-computed with a cross product to ensure orthagonality
-            Up = Vector3.Cross(Right, Direction);
+            //Up = Vector3.Cross(Right, Direction);
 
             // Determine thrust amount from input
-            float thrustAmount = gamePadState.Triggers.Right;
-            if (keyboardState.IsKeyDown(Keys.W) || mouseState.LeftButton == ButtonState.Pressed)
+
+            if (keyboardState.IsKeyDown(Keys.W))
             {
-                thrustAmount = 10.0f;
+                thrustAmount = 5.0f;
                 //shipColBox.LinearVelocity = new Vector3(0, 0, -20f);
 
             }
             else
-                shipColBox.LinearVelocity = new Vector3(0, 0, 0f);
+                thrustAmount = 0;
+            shipColBox.LinearVelocity = new Vector3(0, 0, 0f);
 
             // Calculate force from thrust amount
             Vector3 force = shipColBox.OrientationMatrix.Forward * thrustAmount * ThrustForce;
 
             // Apply acceleration
-            Vector3 acceleration = force / Mass;
+            Vector3 acceleration = force / shipColBox.Mass;
             Velocity += acceleration * elapsed;
 
             //Apply psuedo drag

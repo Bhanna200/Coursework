@@ -116,6 +116,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ChaseCamera.cs" />
+    <Compile Include="Enemy.cs" />
     <Compile Include="EntityModel.cs" />
     <Compile Include="Player.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

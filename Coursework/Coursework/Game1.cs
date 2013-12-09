@@ -8,18 +8,17 @@ using Microsoft.Xna.Framework.GamerServices;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Microsoft.Xna.Framework.Media;
-using BEPUphysics.Collidables;
-using BEPUphysics.Collidables.MobileCollidables;
-using BEPUphysics.Entities.Prefabs;
-using BEPUphysics.MathExtensions;
-using BEPUphysics.Entities;
-using BEPUphysics;
 using BEPUphysics.DataStructures;
-using BEPUphysics.NarrowPhaseSystems.Pairs;
-using BEPUphysics.CollisionShapes;
+using BEPUphysics.MathExtensions;
+using BEPUphysics.Collidables;
+
+using BEPUphysics;
 using BEPUphysicsDrawer.Models;
-using BEPUphysicsDrawer.Font;
+using BEPUphysics.Entities.Prefabs;
 using BEPUphysicsDrawer.Lines;
+using BEPUphysics.Collidables.MobileCollidables;
+using BEPUphysics.NarrowPhaseSystems.Pairs;
+using BEPUphysics.CollisionRuleManagement;
 
 namespace Coursework
 {
@@ -37,19 +36,16 @@ namespace Coursework
 
         public SpriteFont font;
 
+        public int score = 0;
 
         KeyboardState lastKeyboardState = new KeyboardState();
-        GamePadState lastGamePadState = new GamePadState();
-        MouseState lastMousState = new MouseState();
         KeyboardState currentKeyboardState = new KeyboardState();
-        GamePadState currentGamePadState = new GamePadState();
-        MouseState currentMouseState = new MouseState();
 
         public Player player;
         public ChaseCamera camera;
+        public Enemy enemy;
+        public Box bullet;
 
-        //Model shipModel;
-        //Model groundModel;
         public Model terrain;
         public Model CubeModel;
 
@@ -65,12 +61,14 @@ namespace Coursework
 
         bool cameraSpringEnabled = true;
         bool debug = false;
+        bool soundFx = true;
+        bool playMusic = true;
 
         Skybox skybox;
         Vector3 cameraPosition;
 
-        SoundEffect chainGun;
-
+        SoundEffect laser;
+        protected Song music;
 
         #endregion
 
@@ -103,8 +101,8 @@ namespace Coursework
             camera = new ChaseCamera();
 
             // Set the camera offsets
-            camera.DesiredPositionOffset = new Vector3(0.0f, 20.0f, 60.0f);
-            camera.LookAtOffset = new Vector3(0.0f, 15.0f, 0.0f);
+            camera.DesiredPositionOffset = new Vector3(0.0f, 10.0f, 10.0f);
+            camera.LookAtOffset = new Vector3(0.0f, 3.0f, 0.0f);
 
             // Set camera perspective
             camera.NearPlaneDistance = 10.0f;
@@ -125,7 +123,8 @@ namespace Coursework
             space = new Space();
             space.ForceUpdater.Gravity = new Vector3(0, -9.81f, 0);
 
-            player = new Player(GraphicsDevice, this);
+            player = new Player(this);
+            enemy = new Enemy(this);
 
             // Set the camera aspect ratio
             // This must be done after the class to base.Initalize() which will
@@ -157,13 +156,24 @@ namespace Coursework
 
             font = Content.Load<SpriteFont>("Fonts/Debug");
 
-            CubeModel = Content.Load<Model>("Models/cube");
+            CubeModel = Content.Load<Model>("Models/bullet");
 
-            cockpit = Content.Load<Texture2D>("Models/cockpit");
+            cockpit = Content.Load<Texture2D>("Textures/cockpit");
 
             skybox = new Skybox("Skyboxes/Sunset", Content);
 
-            chainGun = Content.Load<SoundEffect>("Audio/chainGun");
+            laser = Content.Load<SoundEffect>("Audio/Laser");
+
+            music = Content.Load<Song>("Audio/background");
+            if (playMusic == true)
+            {
+                MediaPlayer.Play(music);
+            }
+
+            if (playMusic == false)
+            {
+                MediaPlayer.Stop();
+            }
 
             DrawTerrain();
         }
@@ -207,41 +217,19 @@ namespace Coursework
             space.Update();
 
             lastKeyboardState = currentKeyboardState;
-            lastGamePadState = currentGamePadState;
-            lastMousState = currentMouseState;
-
             currentKeyboardState = Keyboard.GetState();
-            currentGamePadState = GamePad.GetState(PlayerIndex.One);
-            currentMouseState = Mouse.GetState();
 
             // Exit when the Escape key or Back button is pressed
-            if (currentKeyboardState.IsKeyDown(Keys.Escape) ||
-                currentGamePadState.Buttons.Back == ButtonState.Pressed)
+            if (currentKeyboardState.IsKeyDown(Keys.Escape))
             {
                 Exit();
             }
 
-            bool touchTopLeft = currentMouseState.LeftButton == ButtonState.Pressed &&
-                    lastMousState.LeftButton != ButtonState.Pressed &&
-                    currentMouseState.X < GraphicsDevice.Viewport.Width / 10 &&
-                    currentMouseState.Y < GraphicsDevice.Viewport.Height / 10;
-
             // Pressing the A button or key toggles the spring behavior on and off
             if (lastKeyboardState.IsKeyUp(Keys.A) &&
-                (currentKeyboardState.IsKeyDown(Keys.A)) ||
-                (lastGamePadState.Buttons.A == ButtonState.Released &&
-                currentGamePadState.Buttons.A == ButtonState.Pressed) ||
-                touchTopLeft)
+                (currentKeyboardState.IsKeyDown(Keys.A)))
             {
                 cameraSpringEnabled = !cameraSpringEnabled;
-            }
-
-            // Reset the ship on R key or right thumb stick clicked
-            if (currentKeyboardState.IsKeyDown(Keys.R) ||
-                currentGamePadState.Buttons.RightStick == ButtonState.Pressed)
-            {
-                player.Reset();
-                camera.Reset();
             }
 
             // Update the ship
@@ -258,7 +246,8 @@ namespace Coursework
                 camera.Reset();
 
 
-            if (currentKeyboardState.IsKeyDown(Keys.Space))
+            if (lastKeyboardState.IsKeyUp(Keys.Space) &&
+                (currentKeyboardState.IsKeyDown(Keys.Space)))
             {
                 Firebullet();
 
@@ -276,30 +265,67 @@ namespace Coursework
                 cameraMode3rdPerson = true;
             }
 
-
             if (currentKeyboardState.IsKeyDown(Keys.U))
             {
                 debug = true;
             }
             else debug = false;
 
-            //angle += 0.002f;
-            //cameraPosition = distance * new Vector3((float)Math.Sin(angle), 0, (float)Math.Cos(angle));
-            //view = Matrix.CreateLookAt(cameraPosition, new Vector3(0, 0, 0), Vector3.UnitY);
+            if (lastKeyboardState.IsKeyDown(Keys.Delete) &&
+                (currentKeyboardState.IsKeyUp(Keys.Delete)))
+            {
+                soundFx = false;
+            }
+
+            if (lastKeyboardState.IsKeyDown(Keys.Insert) &&
+                (currentKeyboardState.IsKeyUp(Keys.Insert)))
+            {
+                soundFx = true;
+            }
+
+            if (lastKeyboardState.IsKeyDown(Keys.F11) &&
+                (currentKeyboardState.IsKeyUp(Keys.F11)))
+            {
+                playMusic = false;
+                MediaPlayer.Stop();
+            }
+
+            if (lastKeyboardState.IsKeyDown(Keys.F12) &&
+                (currentKeyboardState.IsKeyUp(Keys.F12)))
+            {
+                playMusic = true;
+                MediaPlayer.Play(music);
+            }
 
             base.Update(gameTime);
         }
 
         public void Firebullet()
         {
-            chainGun.Play();
-            Box bullet = new Box(player.shipColBox.Position, 1f, 1f, 1f, 1000f);
-            bullet.LinearVelocity = camera.ChaseDirection * 100;
+            if (soundFx == true)
+            {
+                laser.Play();
+            }
+            bullet = new Box(player.shipColBox.Position, 0.3f, 0.3f, 0.3f, 1f);
+            bullet.LinearVelocity = camera.ChaseDirection * 300;
+            //bullet.Mass = 1;
             space.Add(bullet);
-            EntityModel model = new EntityModel(bullet, Content.Load<Model>("Models/cube"), Matrix.Identity, this);
+            EntityModel model = new EntityModel(bullet, Content.Load<Model>("Models/bullet"), Matrix.Identity * Matrix.CreateScale(0.3f), this);
             Components.Add(model);
             bullet.Tag = model;
+            CollisionRules.AddRule(player.shipColBox, bullet, CollisionRule.NoBroadPhase);
+            bullet.CollisionInformation.Events.InitialCollisionDetected += BulletCollision;
+        }
 
+        void BulletCollision(EntityCollidable sender, Collidable other, CollidablePairHandler pair)
+        {
+            var otherEntityInformation = other as EntityCollidable;
+            if (otherEntityInformation != null)
+            {             
+                enemy.hit.Play();
+                space.Remove(otherEntityInformation.Entity);
+                Components.Remove((EntityModel)otherEntityInformation.Entity.Tag);
+            }
         }
 
         /// <summary>
@@ -318,10 +344,10 @@ namespace Coursework
             if (cameraMode3rdPerson == true)
             {
                 cameraModeChase = false;
+                // cameraSpringEnabled = false;
                 camera.Position = player.shipColBox.Position;
                 //camera.ChaseDirection = player.shipColBox.OrientationMatrix.Forward;
-                camera.Up = player.shipColBox.OrientationMatrix.Up;
-
+                camera.Up = player.shipColBox.OrientationMatrix.Forward;
             }
         }
 
@@ -330,13 +356,8 @@ namespace Coursework
         /// </summary>
         protected override void Draw(GameTime gameTime)
         {
-
             //GraphicsDevice device = graphics.GraphicsDevice;
             GraphicsDevice.Clear(Color.CornflowerBlue);
-
-            //RasterizerState rasterizerState = new RasterizerState();
-            //rasterizerState.FillMode = FillMode.Solid;
-            //GraphicsDevice.RasterizerState = rasterizerState;
 
             RasterizerState originalRasterizerState = graphics.GraphicsDevice.RasterizerState;
             RasterizerState rasterizerState = new RasterizerState();
@@ -345,7 +366,72 @@ namespace Coursework
 
             skybox.Draw(camera.View, camera.Projection, cameraPosition);
 
+            base.Draw(gameTime);
 
+            Draw3rdPersonCamera();
+            DrawDebug();
+            ToggleSound();
+            ToggleMusic();
+
+            GraphicsDevice.BlendState = BlendState.Opaque;
+            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+            GraphicsDevice.SamplerStates[0] = SamplerState.LinearWrap;
+
+        }
+
+        private void DrawScenery()
+        {
+            Rectangle screenRectangle = new Rectangle(0, 0, graphics.PreferredBackBufferWidth, graphics.PreferredBackBufferHeight);
+            spriteBatch.Draw(cockpit, screenRectangle, Color.White);
+        }
+
+        private void Draw3rdPersonCamera()
+        {
+            if (cameraMode3rdPerson == true)
+            {
+
+                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+                DrawScenery();
+                spriteBatch.End();
+            }
+        }
+
+        private void ToggleSound()
+        {
+            if (soundFx == true && lastKeyboardState.IsKeyDown(Keys.Delete))
+            {
+                spriteBatch.Begin();
+                spriteBatch.DrawString(font, "SoundFX Off: ", new Vector2(graphics.PreferredBackBufferWidth / 2, graphics.PreferredBackBufferHeight / 2), Color.GreenYellow);
+                spriteBatch.End();
+            }
+
+            if (soundFx == false && lastKeyboardState.IsKeyDown(Keys.Insert))
+            {
+                spriteBatch.Begin();
+                spriteBatch.DrawString(font, "SoundFX On: ", new Vector2(graphics.PreferredBackBufferWidth / 2, graphics.PreferredBackBufferHeight / 2), Color.GreenYellow);
+                spriteBatch.End();
+            }
+        }
+
+        private void ToggleMusic()
+        {
+            if (playMusic == true && lastKeyboardState.IsKeyDown(Keys.F11))
+            {
+                spriteBatch.Begin();
+                spriteBatch.DrawString(font, "Music Off: ", new Vector2(graphics.PreferredBackBufferWidth / 2, graphics.PreferredBackBufferHeight / 2), Color.GreenYellow);
+                spriteBatch.End();
+            }
+
+            if (playMusic == false && lastKeyboardState.IsKeyDown(Keys.F12))
+            {
+                spriteBatch.Begin();
+                spriteBatch.DrawString(font, "Music On: ", new Vector2(graphics.PreferredBackBufferWidth / 2, graphics.PreferredBackBufferHeight / 2), Color.GreenYellow);
+                spriteBatch.End();
+            }
+        }
+
+        private void DrawDebug()
+        {
             if (debug == true)
             {
                 debugDrawer.LightingEnabled = false;
@@ -357,67 +443,34 @@ namespace Coursework
                 debugBoundingBoxDrawer.Draw(debugDrawer, space);
 
                 spriteBatch.Begin();
-
                 spriteBatch.DrawString(font, "Ship Pos: " + player.shipColBox.Position, new Vector2(10, 10), Color.Black);
-
                 spriteBatch.End();
-
             }
-
-            base.Draw(gameTime);
-
-            if (cameraMode3rdPerson == true)
-            {
-
-                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
-
-                DrawScenery();
-
-                spriteBatch.End();
-
-            }
-
-
-
-
-
-            GraphicsDevice.BlendState = BlendState.Opaque;
-            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
-            GraphicsDevice.SamplerStates[0] = SamplerState.LinearWrap;
-
-
         }
-
-        private void DrawScenery()
-        {
-            Rectangle screenRectangle = new Rectangle(0, 0, graphics.PreferredBackBufferWidth, graphics.PreferredBackBufferHeight);
-            spriteBatch.Draw(cockpit, screenRectangle, Color.White);
-        }
-
 
         ///// <summary>
-        ///// Simple model drawing method. The interesting part here is that
-        ///// the view and projection matrices are taken from the camera object.
-        ///// </summary>        
-        //private void DrawModel(Model model, Matrix world)
-        //{
-        //    Matrix[] transforms = new Matrix[model.Bones.Count];
-        //    model.CopyAbsoluteBoneTransformsTo(transforms);
+        /// Simple model drawing method. The interesting part here is that
+        /// the view and projection matrices are taken from the camera object.
+        /// </summary>        
+        private void DrawModel(Model model, Matrix world)
+        {
+            Matrix[] transforms = new Matrix[model.Bones.Count];
+            model.CopyAbsoluteBoneTransformsTo(transforms);
 
-        //    foreach (ModelMesh mesh in model.Meshes)
-        //    {
-        //        foreach (BasicEffect effect in mesh.Effects)
-        //        {
-        //            effect.EnableDefaultLighting();
-        //            effect.World = transforms[mesh.ParentBone.Index] * world;
+            foreach (ModelMesh mesh in model.Meshes)
+            {
+                foreach (BasicEffect effect in mesh.Effects)
+                {
+                    effect.EnableDefaultLighting();
+                    effect.World = transforms[mesh.ParentBone.Index] * world;
 
-        //            // Use the matrices provided by the chase camera
-        //            effect.View = camera.View;
-        //            effect.Projection = camera.Projection;
-        //        }
-        //        mesh.Draw();
-        //    }
-        //}
+                    // Use the matrices provided by the chase camera
+                    effect.View = camera.View;
+                    effect.Projection = camera.Projection;
+                }
+                mesh.Draw();
+            }
+        }
         #endregion
     }
 }
